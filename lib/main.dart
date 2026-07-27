@@ -20,19 +20,17 @@ import 'package:readright/screen/studentDashboard.dart';
 import 'package:readright/screen/progress.dart';
 import 'package:readright/screen/practice.dart';
 import 'package:readright/screen/wordList.dart';
-import 'package:readright/screen/feedback.dart';
 import 'package:readright/screen/teacher/teacherDashboard.dart';
 import 'package:readright/screen/teacher/teacherWordLists.dart';
 import 'package:readright/screen/teacher/teacherStudents.dart';
 import 'package:readright/screen/teacher/teacherSettings.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  await dotenv.load(fileName: ".env");
-
+  // No secrets are bundled with the app anymore — the Azure Speech key
+  // lives only in the pronunciation-assess Edge Function's environment.
   const supabaseUrl = AppConfig.supabaseUrl;
   const supabaseAnonKey = AppConfig.supabaseAnonKey;
 
@@ -165,7 +163,6 @@ class _MyAppState extends State<MyApp> {
         '/progress': (context) => const ProgressPage(),
         '/practice': (context) => const PracticePage(),
         '/wordlist': (context) => const WordListPage(),
-        '/feedback': (context) => const FeedbackPage(),
 
         '/teacherDashboard': (context) => const TeacherDashboard(),
         '/teacherWordLists': (context) =>

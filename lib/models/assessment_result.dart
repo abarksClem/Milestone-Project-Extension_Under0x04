@@ -16,11 +16,6 @@ class AssessmentResult {
   });
 
   factory AssessmentResult.fromJson(Map<String, dynamic> result) {
-    // final result = json["result"];
-    // if (result == null) {
-    //   throw Exception("Missing result field");
-    // }
-
     final nbestList = result["NBest"];
     if (nbestList == null || nbestList.isEmpty) {
       throw Exception("Missing NBest list");
@@ -28,7 +23,9 @@ class AssessmentResult {
 
     final nbest = nbestList[0];
 
-    // final pa = nbest["PronunciationAssessment"] ?? {};
+    // Azure returns the whole-utterance pronunciation scores as top-level
+    // fields on the NBest entry (not nested under "PronunciationAssessment")
+    // when using the header-based scoring config.
     final pa = nbest;
 
     return AssessmentResult(
@@ -43,13 +40,26 @@ class AssessmentResult {
     );
   }
 
+  /// All phonemes across all words, in the order Azure returned them.
+  List<PhonemeResult> get allPhonemes =>
+      words.expand((w) => w.phonemes).toList();
+
+  /// The sounds worth practicing again — anything scored below [threshold].
+  /// Only populated when the request asked for "Phoneme" granularity.
+  List<PhonemeResult> weakPhonemes({double threshold = 60}) =>
+      allPhonemes.where((p) => p.accuracy < threshold).toList();
 }
 
 class WordResult {
   final String word;
   final double accuracy;
+  final List<PhonemeResult> phonemes;
 
-  WordResult({required this.word, required this.accuracy});
+  WordResult({
+    required this.word,
+    required this.accuracy,
+    this.phonemes = const [],
+  });
 
   factory WordResult.fromJson(Map<String, dynamic> json) {
     final pa = json["PronunciationAssessment"] ?? {};
@@ -57,7 +67,25 @@ class WordResult {
     return WordResult(
       word: json["Word"] ?? "",
       accuracy: (pa["AccuracyScore"] ?? 0).toDouble(),
+      phonemes: ((json["Phonemes"] ?? []) as List)
+          .map((p) => PhonemeResult.fromJson(p))
+          .toList(),
     );
   }
+}
 
+class PhonemeResult {
+  final String phoneme;
+  final double accuracy;
+
+  PhonemeResult({required this.phoneme, required this.accuracy});
+
+  factory PhonemeResult.fromJson(Map<String, dynamic> json) {
+    final pa = json["PronunciationAssessment"] ?? {};
+
+    return PhonemeResult(
+      phoneme: json["Phoneme"] ?? "",
+      accuracy: (pa["AccuracyScore"] ?? 0).toDouble(),
+    );
+  }
 }

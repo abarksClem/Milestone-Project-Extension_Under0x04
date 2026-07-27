@@ -5,4 +5,9 @@ class AppConfig {
   static const supabaseUrl = 'https://rafzvinelnfdlwzqtqbc.supabase.co';
   static const supabaseAnonKey =
       'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJhZnp2aW5lbG5mZGx3enF0cWJjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIzMzgzOTcsImV4cCI6MjA5NzkxNDM5N30.iqxKHTS82CfOdUGOmTtM1BkUhbboFR_AOlE7FNaqGBM';
+
+  // Name of the Supabase Edge Function that proxies pronunciation-assessment
+  // requests to Azure Speech. The Azure key lives only in that function's
+  // secrets — never in this app.
+  static const pronunciationAssessFunction = 'pronunciation-assess';
 }

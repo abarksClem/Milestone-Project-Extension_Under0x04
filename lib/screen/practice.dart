@@ -5,7 +5,6 @@ import 'package:readright/config/config.dart';
 import 'package:readright/widgets/student_base_scaffold.dart';
 import 'package:readright/models/word.dart' hide Attempt;
 import 'package:readright/models/attempt.dart';
-import 'package:http/http.dart' as http;
 import 'package:permission_handler/permission_handler.dart';
 import 'package:path_provider/path_provider.dart';
 import 'dart:io';
@@ -14,7 +13,6 @@ import 'package:record/record.dart';
 import '../models/assessment_result.dart';
 import 'package:confetti/confetti.dart';
 import 'package:flutter_tts/flutter_tts.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class PracticePage extends StatefulWidget {
   final bool testMode;
@@ -513,6 +511,17 @@ class _PracticePageState extends State<PracticePage> {
     await _sendToAssessmentServer(File(path));
   }
 
+  /// Human-readable feedback for a pronunciation score. Shared between the
+  /// in-session assessment card and the row saved to `attempts`, so the
+  /// feedback a learner sees in the moment matches what shows up later on
+  /// their Progress page.
+  String _feedbackForScore(double score) {
+    if (score >= 90) return "Excellent! You mastered this word.";
+    if (score >= 75) return "Great job — clear and accurate.";
+    if (score >= 50) return "Good attempt — a little more practice will help.";
+    return "Let's try that word again together.";
+  }
+
   Future<void> _sendToAssessmentServer(File wavFile) async {
     if (_currentWord == null) return;
 
@@ -523,49 +532,46 @@ class _PracticePageState extends State<PracticePage> {
     while (goThrough < loop && continues) {
       goThrough++;
 
-      final key = dotenv.env['AZURE_KEY'] as String;
-
-      final configJson = {
-        "referenceText": _currentWord!.text,
-        "gradingSystem": "HundredMark",
-        "dimension": "Comprehensive",
-      };
-      final configBase64 =
-      base64.encode(utf8.encode(json.encode(configJson)));
-
-      final url = Uri.parse(
-        "https://eastus2.stt.speech.microsoft.com/speech/recognition/conversation/cognitiveservices/v1?language=en-US",
-      );
-
+      // The Azure Speech key never lives in the app. We send the recording
+      // to our own thin backend (a Supabase Edge Function), which holds the
+      // key server-side, calls Azure, and hands back the same JSON shape
+      // Azure would have returned.
       final audioBytes = await wavFile.readAsBytes();
 
-      final response = await http.post(
-        url,
-        headers: {
-          "Ocp-Apim-Subscription-Key": key,
-          "Content-Type": "audio/wav",
-          "Pronunciation-Assessment": configBase64,
-        },
-        body: audioBytes,
-      );
+      FunctionResponse response;
+      try {
+        response = await Supabase.instance.client.functions.invoke(
+          AppConfig.pronunciationAssessFunction,
+          body: {
+            'audio_base64': base64Encode(audioBytes),
+            'reference_text': _currentWord!.text,
+            'granularity': 'Phoneme',
+          },
+        );
+      } catch (_) {
+        response = FunctionResponse(status: 0, data: null);
+      }
 
       final user = Supabase.instance.client.auth.currentUser;
       if (user == null) return;
 
-      if (response.statusCode != 200 && goThrough == 3) {
+      if (response.status != 200 && goThrough == 3) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("Network Error retries failed.")),
         );
         _assessmentResult = null;
         setState(() {});
         return;
-      } else if (response.statusCode != 200) {
+      } else if (response.status != 200) {
         ScaffoldMessenger.of(context)
             .showSnackBar(const SnackBar(content: Text("Retrying...")));
       } else {
         continues = false;
 
-        final decoded = jsonDecode(response.body);
+        final rawData = response.data;
+        final decoded = rawData is String
+            ? jsonDecode(rawData)
+            : Map<String, dynamic>.from(rawData as Map);
         _assessmentResult = AssessmentResult.fromJson(decoded);
 
         final wordId = _currentWord!.id;
@@ -595,7 +601,7 @@ class _PracticePageState extends State<PracticePage> {
           'user_id': user.id,
           'word_id': wordId,
           'score': score,
-          'feedback': "Good job",
+          'feedback': _feedbackForScore(score.toDouble()),
           'timestamp': DateTime.now().toIso8601String(),
         };
 
@@ -793,26 +799,63 @@ class _PracticePageState extends State<PracticePage> {
     );
   }
 
+  Widget _buildSoundsToPractice(AssessmentResult r) {
+    final weak = r.weakPhonemes();
+
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              "Sounds to practice",
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: Theme.of(context).colorScheme.secondary,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: weak.map((p) {
+                return Chip(
+                  avatar: const Icon(Icons.hearing, size: 18),
+                  label: Text(
+                    "/${p.phoneme}/  ${p.accuracy.toStringAsFixed(0)}%",
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  backgroundColor: Colors.orange.withOpacity(0.15),
+                  side: const BorderSide(color: Colors.orange),
+                );
+              }).toList(),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildAssessmentView(AssessmentResult r) {
     final score = r.pronScore;
+    final message = _feedbackForScore(score);
 
-    String message;
     String emoji;
 
     if (score >= 90) {
-      message = "Amazing job!";
       emoji = "🌟";
       conSpeech();
     } else if (score >= 75) {
-      message = "Great work!";
       emoji = "👍";
       decentSpeech();
     } else if (score >= 50) {
-      message = "Keep practicing!";
       emoji = "💪";
       badSpeech();
     } else {
-      message = "You're doing great — try again!";
       emoji = "😊";
       badSpeech();
     }
@@ -844,6 +887,11 @@ class _PracticePageState extends State<PracticePage> {
                 color: score >= 75 ? Colors.green : Colors.orange,
               ),
             ),
+            if (!mastered && r.weakPhonemes().isNotEmpty) ...[
+              const SizedBox(height: 24),
+              _buildSoundsToPractice(r),
+            ],
+
             const SizedBox(height: 40),
 
             // Dynamically show the next word button
