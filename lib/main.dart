@@ -29,8 +29,9 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 
 Future<void> main() async {
-  await dotenv.load(fileName: ".env");
   WidgetsFlutterBinding.ensureInitialized();
+
+  await dotenv.load(fileName: ".env");
 
   const supabaseUrl = AppConfig.supabaseUrl;
   const supabaseAnonKey = AppConfig.supabaseAnonKey;
@@ -126,39 +127,62 @@ class _MyAppState extends State<MyApp> {
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
 
-    if (!_initialized || _checkingRole) {
-      return const MaterialApp(
-        home: Scaffold(body: Center(child: CircularProgressIndicator())),
-      );
-    }
+    final bool isLoading = !_initialized || _checkingRole;
 
     return MaterialApp(
       title: AppConfig.appName,
       debugShowCheckedModeBanner: false,
+
+      initialRoute: '/',
+
       theme: ThemeData(
-        colorScheme: themeProvider.isDarkMode ? ColorScheme.dark(
+        colorScheme: themeProvider.isDarkMode
+            ? ColorScheme.dark(
           primary: Color(AppConfig.primaryColor),
           secondary: Color(AppConfig.secondaryColor),
-        ) : ColorScheme.light(
+        )
+            : ColorScheme.light(
           primary: Color(AppConfig.primaryColor),
           secondary: Color(AppConfig.secondaryColor),
         ),
         useMaterial3: false,
       ),
-      home: _homePage,
+
+      home: isLoading
+          ? const Scaffold(
+        body: Center(
+          child: CircularProgressIndicator(),
+        ),
+      )
+          : (_homePage ?? const LoginPage()),
+
       routes: {
         '/login': (context) => const LoginPage(),
         '/signup': (context) => const SignUpPage(),
         '/resetPassword': (context) => const ResetPasswordPage(),
+
         '/studentDashboard': (context) => const StudentDashboard(),
         '/progress': (context) => const ProgressPage(),
         '/practice': (context) => const PracticePage(),
         '/wordlist': (context) => const WordListPage(),
         '/feedback': (context) => const FeedbackPage(),
+
         '/teacherDashboard': (context) => const TeacherDashboard(),
-        '/teacherWordLists': (context) => const TeacherWordListsPage(),
-        '/teacherStudents': (context) => const TeacherStudentsPage(),
-        '/teacherSettings': (context) => const TeacherSettingsPage(),
+        '/teacherWordLists': (context) =>
+        const TeacherWordListsPage(),
+        '/teacherStudents': (context) =>
+        const TeacherStudentsPage(),
+        '/teacherSettings': (context) =>
+        const TeacherSettingsPage(),
+      },
+
+      onUnknownRoute: (settings) {
+        debugPrint('Unknown route requested: ${settings.name}');
+
+        return MaterialPageRoute(
+          builder: (_) => const LoginPage(),
+          settings: settings,
+        );
       },
     );
   }
