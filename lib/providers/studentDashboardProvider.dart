@@ -78,23 +78,41 @@ class StudentDashboardProvider extends ChangeNotifier {
 
   // Load current Dolch list via RPC
   Future<void> _loadCurrentList(String userId) async {
-    final rpc = await client!.rpc(
+    final dynamic rpcResult = await client!.rpc(
       'get_current_list_for_student',
       params: {'user_id_input': userId},
     );
 
-    if (rpc == null || rpc['list_id'] == null) {
+    debugPrint('Current-list RPC type: ${rpcResult.runtimeType}');
+    debugPrint('Current-list RPC value: $rpcResult');
+
+    Map<String, dynamic>? record;
+
+    // A PostgreSQL function declared with RETURNS TABLE or SETOF
+    // usually comes back from Supabase as a List.
+    if (rpcResult is List) {
+      if (rpcResult.isNotEmpty && rpcResult.first is Map) {
+        record = Map<String, dynamic>.from(rpcResult.first as Map);
+      }
+    } else if (rpcResult is Map) {
+      // Also support an RPC that returns one JSON object.
+      record = Map<String, dynamic>.from(rpcResult);
+    }
+
+    final dynamic rawListId = record?['list_id'];
+
+    if (rawListId == null) {
       currentList = {
-        "list_id": null,
-        "status": "completed_all_lists",
-        "title": "All Lists Completed"
+        'id': null,
+        'list_id': null,
+        'status': 'completed_all_lists',
+        'title': 'All Lists Completed',
       };
       return;
     }
 
-    final listId = rpc['list_id'] as String;
+    final String listId = rawListId.toString();
 
-    // Fetch list details
     final listRow = await client!
         .from('word_lists')
         .select('id, title, list_order')
@@ -102,10 +120,10 @@ class StudentDashboardProvider extends ChangeNotifier {
         .maybeSingle();
 
     if (listRow == null) {
-      throw Exception("Word list not found for list_id=$listId");
+      throw Exception('Word list not found for list_id=$listId');
     }
 
-    currentList = listRow;
+    currentList = Map<String, dynamic>.from(listRow);
   }
 
   // Calculate progress in current list
