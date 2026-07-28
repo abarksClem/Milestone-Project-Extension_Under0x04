@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:readright/config/config.dart';
-import 'package:readright/widgets/student_base_scaffold.dart';
 import 'package:readright/providers/studentDashboardProvider.dart';
+import 'package:readright/widgets/student_base_scaffold.dart';
 
 class StudentDashboard extends StatefulWidget {
   final bool skipLoad;
@@ -30,11 +30,8 @@ class _StudentDashboardState extends State<StudentDashboard> {
       return;
     }
 
-    if (widget.skipLoad) {
-      return;
-    }
+    if (widget.skipLoad) return;
 
-    // Load dashboard on first frame
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<StudentDashboardProvider>().loadDashboard();
     });
@@ -55,8 +52,7 @@ class _StudentDashboardState extends State<StudentDashboard> {
             ? Center(
           child: Text(
             dashboard.errorMessage!,
-            style:
-            const TextStyle(color: Colors.red, fontSize: 18),
+            style: const TextStyle(color: Colors.red, fontSize: 18),
           ),
         )
             : _buildDashboardContent(dashboard),
@@ -75,60 +71,115 @@ class _StudentDashboardState extends State<StudentDashboard> {
         ? 0.0
         : dashboard.masteredWords / dashboard.totalWords;
 
-    return Padding(
+    return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Text(
-                'Welcome, $firstName!',
-                style: const TextStyle(
-                  fontSize: 26,
-                  fontWeight: FontWeight.bold,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Your class: ${user?['class_name'] ?? 'N/A'}',
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                ),
-                textAlign: TextAlign.center,
-              ),
-            ],
+          Text(
+            'Welcome, $firstName!',
+            style: const TextStyle(
+              fontSize: 26,
+              fontWeight: FontWeight.bold,
+            ),
+            textAlign: TextAlign.center,
           ),
-
-          const SizedBox(height: 40),
-
+          const SizedBox(height: 8),
+          Text(
+            'Your class: ${user?['class_name'] ?? 'N/A'}',
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 32),
           Text(
             'Progress in current list: $title',
             style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 20),
-
           LinearProgressIndicator(
             value: progress,
             minHeight: 12,
             backgroundColor: Colors.grey[300],
             color: Color(AppConfig.primaryColor),
           ),
-
           const SizedBox(height: 10),
-
           Text(
-            '${(progress * 100).toStringAsFixed(1)}% • ${dashboard.masteredWords} / ${dashboard.totalWords} words mastered',
+            '${(progress * 100).toStringAsFixed(1)}% • '
+                '${dashboard.masteredWords} / ${dashboard.totalWords} words mastered',
             style: const TextStyle(fontSize: 16),
             textAlign: TextAlign.center,
           ),
-
-          const Spacer(),
-
+          const SizedBox(height: 34),
+          Card(
+            elevation: 4,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                children: [
+                  Container(
+                    width: 72,
+                    height: 72,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Color(AppConfig.secondaryColor).withOpacity(0.14),
+                    ),
+                    child: Icon(
+                      Icons.style_rounded,
+                      size: 42,
+                      color: Color(AppConfig.secondaryColor),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Flash Dash',
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  const Text(
+                    'Race through your sight words. Swipe right when you know one and left to practice it again.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 16, height: 1.4),
+                  ),
+                  const SizedBox(height: 18),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 55,
+                    child: ElevatedButton.icon(
+                      onPressed: () {
+                        Navigator.pushNamed(context, '/flashDash');
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Color(AppConfig.secondaryColor),
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      icon: const Icon(Icons.bolt_rounded, size: 27),
+                      label: const Text(
+                        'Play Flash Dash',
+                        style: TextStyle(
+                          fontSize: 19,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 18),
           SizedBox(
             width: double.infinity,
             height: 55,
