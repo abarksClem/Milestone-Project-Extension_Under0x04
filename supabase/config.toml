@@ -1,0 +1,22 @@
+
+[functions.generate-story]
+enabled = true
+verify_jwt = false
+import_map = "./functions/generate-story/deno.json"
+# Uncomment to specify a custom file path to the entrypoint.
+# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
+entrypoint = "./functions/generate-story/index.ts"
+# Specifies static files to be bundled with the function. Supports glob patterns.
+# For example, if you want to serve static HTML pages in your function:
+# static_files = [ "./functions/generate-story/*.html" ]
+
+[functions.generate-storysupabase]
+enabled = true
+verify_jwt = false
+import_map = "./functions/generate-storysupabase/deno.json"
+# Uncomment to specify a custom file path to the entrypoint.
+# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
+entrypoint = "./functions/generate-storysupabase/index.ts"
+# Specifies static files to be bundled with the function. Supports glob patterns.
+# For example, if you want to serve static HTML pages in your function:
+# static_files = [ "./functions/generate-storysupabase/*.html" ]

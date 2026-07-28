@@ -36,7 +36,7 @@ import 'package:readright/screen/teacher/teacherWordLists.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  await dotenv.load(fileName: '.env');
+  //await dotenv.load(fileName: '.env');
 
   MediaKit.ensureInitialized();
 

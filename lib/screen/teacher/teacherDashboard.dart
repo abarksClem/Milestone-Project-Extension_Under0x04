@@ -7,6 +7,7 @@ import 'package:readright/widgets/teacher_base_scaffold.dart';
 import 'package:readright/providers/teacherProvider.dart';
 import 'package:file_picker/file_picker.dart';
 import 'dart:io';
+import 'package:readright/screen/teacher/teacher_story_builder.dart';
 
 class TeacherDashboard extends StatelessWidget {
   const TeacherDashboard({super.key});
@@ -66,9 +67,9 @@ class _TeacherDashboardView extends StatelessWidget {
                             Text(
                               'Class Progress Overview',
                               style: TextStyle(
-                                fontSize: 22,
-                                fontWeight: FontWeight.bold,
-                                color: Theme.of(context).colorScheme.secondary
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.bold,
+                                  color: Theme.of(context).colorScheme.secondary
                               ),
                             ),
                             const SizedBox(height: 8),
@@ -105,316 +106,354 @@ class _TeacherDashboardView extends StatelessWidget {
                         )
                       // Main content
                       else ...[
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          child: Card(
-                            elevation: 3,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            child: Card(
+                              elevation: 3,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.all(20),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Icon(
+                                          Icons.bar_chart,
+                                          color: Color(AppConfig.primaryColor),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          'Class Performance Summary',
+                                          style: TextStyle(
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.w600,
+                                            color: Theme.of(context).colorScheme.secondary,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 16),
+                                    Row(
+                                      mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        _buildStatTile(
+                                          context,
+                                          'Avg. Accuracy',
+                                          '${provider.classAverageAccuracy.toStringAsFixed(0)}%',
+                                          Color(AppConfig.primaryColor),
+                                        ),
+                                        _buildStatTile(
+                                          context,
+                                          'Top Performer',
+                                          provider.topPerformerName ?? 'No data',
+                                          Color(AppConfig.secondaryColor),
+                                        ),
+                                        _buildStatTile(
+                                          context,
+                                          'Needs Help',
+                                          '${provider.needsHelpCount} Students',
+                                          Colors.redAccent,
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ),
-                            child: Padding(
-                              padding: const EdgeInsets.all(20),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      Icon(
-                                        Icons.bar_chart,
-                                        color: Color(AppConfig.primaryColor),
+                          ),
+
+                          const SizedBox(height: 20),
+
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            child: Card(
+                              elevation: 3,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.all(20),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        const Icon(
+                                          Icons.error_outline,
+                                          color: Colors.orange,
+                                        ),
+                                        const SizedBox(width: 8),
+                                        const Text(
+                                          'Most Missed Words',
+                                          style: TextStyle(
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 12),
+                                    if (provider.mostMissedLoading)
+                                      const Center(
+                                        child: CircularProgressIndicator(),
                                       ),
-                                      const SizedBox(width: 8),
+                                    if (!provider.mostMissedLoading &&
+                                        provider.mostMissedError != null)
                                       Text(
-                                        'Class Performance Summary',
-                                        style: TextStyle(
-                                          fontSize: 18,
-                                          fontWeight: FontWeight.w600,
-                                          color: Theme.of(context).colorScheme.secondary,
-                                        ),
+                                        provider.mostMissedError!,
+                                        style: const TextStyle(color: Colors.red),
                                       ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 16),
-                                  Row(
-                                    mainAxisAlignment:
-                                        MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      _buildStatTile(
-                                        context,
-                                        'Avg. Accuracy',
-                                        '${provider.classAverageAccuracy.toStringAsFixed(0)}%',
-                                        Color(AppConfig.primaryColor),
-                                      ),
-                                      _buildStatTile(
-                                        context,
-                                        'Top Performer',
-                                        provider.topPerformerName ?? 'No data',
-                                        Color(AppConfig.secondaryColor),
-                                      ),
-                                      _buildStatTile(
-                                        context,
-                                        'Needs Help',
-                                        '${provider.needsHelpCount} Students',
-                                        Colors.redAccent,
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-
-                        const SizedBox(height: 20),
-
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          child: Card(
-                            elevation: 3,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            child: Padding(
-                              padding: const EdgeInsets.all(20),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      const Icon(
-                                        Icons.error_outline,
-                                        color: Colors.orange,
-                                      ),
-                                      const SizedBox(width: 8),
-                                      const Text(
-                                        'Most Missed Words',
-                                        style: TextStyle(
-                                          fontSize: 18,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 12),
-                                  if (provider.mostMissedLoading)
-                                    const Center(
-                                      child: CircularProgressIndicator(),
-                                    ),
-                                  if (!provider.mostMissedLoading &&
-                                      provider.mostMissedError != null)
-                                    Text(
-                                      provider.mostMissedError!,
-                                      style: const TextStyle(color: Colors.red),
-                                    ),
-                                  if (!provider.mostMissedLoading &&
-                                      provider.mostMissedError == null &&
-                                      provider.mostMissedWords.isEmpty)
-                                    const Text("No data yet."),
-                                  if (!provider.mostMissedLoading &&
-                                      provider.mostMissedError == null &&
-                                      provider.mostMissedWords.isNotEmpty)
-                                    Column(
-                                      children: provider.mostMissedWords.map((
-                                        row,
-                                      ) {
-                                        return Padding(
-                                          padding: const EdgeInsets.symmetric(
-                                            vertical: 6,
-                                          ),
-                                          child: Row(
-                                            mainAxisAlignment:
-                                                MainAxisAlignment.spaceBetween,
-                                            children: [
-                                              Text(row['word']),
-                                              Text(
-                                                '${row['avg_score'].toStringAsFixed(0)}% (${row['attempts']} attempts)',
-                                                style: const TextStyle(
-                                                  color: Colors.redAccent,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        );
-                                      }).toList(),
-                                    ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-
-                        const SizedBox(height: 20),
-
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          child: Column(
-                            children: provider.students.isEmpty
-                                ? [
-                                    const Padding(
-                                      padding: EdgeInsets.symmetric(
-                                        vertical: 24,
-                                      ),
-                                      child: Text(
-                                        'No student data yet.\nStudents will appear once they begin practicing.',
-                                        textAlign: TextAlign.center,
-                                      ),
-                                    ),
-                                  ]
-                                : provider.students
-                                      .map(
-                                        (s) => Padding(
-                                          padding: const EdgeInsets.only(
-                                            bottom: 12,
-                                          ),
-                                          child: InkWell(
-                                            onTap: () {
-                                              Navigator.push(
-                                                context,
-                                                MaterialPageRoute(
-                                                  builder: (_) =>
-                                                      StudentAttemptsScreen(
-                                                        studentId: s.id,
-                                                        studentName: s.name,
-                                                      ),
-                                                ),
-                                              );
-                                            },
-                                            child: _buildStudentCard(
-                                              context: context,
-                                              name: s.name,
-                                              progress: s.progress,
-                                              accuracy: s.accuracy.toInt(),
-                                              trend: s.trendingUp
-                                                  ? Icons.trending_up
-                                                  : Icons.trending_down,
-                                              color: s.trendingUp
-                                                  ? Color(
-                                                      AppConfig.primaryColor,
-                                                    )
-                                                  : Colors.orangeAccent,
+                                    if (!provider.mostMissedLoading &&
+                                        provider.mostMissedError == null &&
+                                        provider.mostMissedWords.isEmpty)
+                                      const Text("No data yet."),
+                                    if (!provider.mostMissedLoading &&
+                                        provider.mostMissedError == null &&
+                                        provider.mostMissedWords.isNotEmpty)
+                                      Column(
+                                        children: provider.mostMissedWords.map((
+                                            row,
+                                            ) {
+                                          return Padding(
+                                            padding: const EdgeInsets.symmetric(
+                                              vertical: 6,
                                             ),
+                                            child: Row(
+                                              mainAxisAlignment:
+                                              MainAxisAlignment.spaceBetween,
+                                              children: [
+                                                Text(row['word']),
+                                                Text(
+                                                  '${row['avg_score'].toStringAsFixed(0)}% (${row['attempts']} attempts)',
+                                                  style: const TextStyle(
+                                                    color: Colors.redAccent,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          );
+                                        }).toList(),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+
+                          const SizedBox(height: 20),
+
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            child: Column(
+                              children: provider.students.isEmpty
+                                  ? [
+                                const Padding(
+                                  padding: EdgeInsets.symmetric(
+                                    vertical: 24,
+                                  ),
+                                  child: Text(
+                                    'No student data yet.\nStudents will appear once they begin practicing.',
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ),
+                              ]
+                                  : provider.students
+                                  .map(
+                                    (s) => Padding(
+                                  padding: const EdgeInsets.only(
+                                    bottom: 12,
+                                  ),
+                                  child: InkWell(
+                                    onTap: () {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) =>
+                                              StudentAttemptsScreen(
+                                                studentId: s.id,
+                                                studentName: s.name,
+                                              ),
+                                        ),
+                                      );
+                                    },
+                                    child: _buildStudentCard(
+                                      context: context,
+                                      name: s.name,
+                                      progress: s.progress,
+                                      accuracy: s.accuracy.toInt(),
+                                      trend: s.trendingUp
+                                          ? Icons.trending_up
+                                          : Icons.trending_down,
+                                      color: s.trendingUp
+                                          ? Color(
+                                        AppConfig.primaryColor,
+                                      )
+                                          : Colors.orangeAccent,
+                                    ),
+                                  ),
+                                ),
+                              )
+                                  .toList(),
+                            ),
+                          ),
+
+                          const SizedBox(height: 24),
+
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            child: Column(
+                              children: [
+                                SizedBox(
+                                  width: double.infinity,
+                                  height: 54,
+                                  child: ElevatedButton.icon(
+                                    onPressed: () {
+                                      showModalBottomSheet(
+                                        context: context,
+                                        isScrollControlled: true,
+                                        shape: const RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.vertical(
+                                            top: Radius.circular(24),
                                           ),
                                         ),
-                                      )
-                                      .toList(),
-                          ),
-                        ),
-
-                        const SizedBox(height: 24),
-
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          child: Column(
-                            children: [
-                              SizedBox(
-                                width: double.infinity,
-                                height: 54,
-                                child: ElevatedButton.icon(
-                                  onPressed: () {
-                                    showModalBottomSheet(
-                                      context: context,
-                                      isScrollControlled: true,
-                                      shape: const RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.vertical(
-                                          top: Radius.circular(24),
+                                        builder: (_) => Padding(
+                                          padding: EdgeInsets.only(
+                                            bottom: MediaQuery.of(
+                                              context,
+                                            ).viewInsets.bottom,
+                                          ),
+                                          child: _AddStudentForm(
+                                            provider: provider,
+                                          ),
                                         ),
+                                      );
+                                    },
+                                    icon: const Icon(Icons.person_add_alt_1),
+                                    label: const Text(
+                                      "Add New Student",
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w600,
                                       ),
-                                      builder: (_) => Padding(
-                                        padding: EdgeInsets.only(
-                                          bottom: MediaQuery.of(
-                                            context,
-                                          ).viewInsets.bottom,
+                                    ),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Color(
+                                        AppConfig.primaryColor,
+                                      ),
+                                      foregroundColor: Colors.white,
+                                    ),
+                                  ),
+                                ),
+
+                                const SizedBox(height: 12),
+
+                                SizedBox(
+                                  width: double.infinity,
+                                  height: 54,
+                                  child: OutlinedButton.icon(
+                                    onPressed: () {
+                                      showModalBottomSheet(
+                                        context: context,
+                                        isScrollControlled: true,
+                                        shape: const RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.vertical(
+                                            top: Radius.circular(24),
+                                          ),
                                         ),
-                                        child: _AddStudentForm(
+                                        builder: (_) => _BulkUploadStudentForm(
                                           provider: provider,
                                         ),
-                                      ),
-                                    );
-                                  },
-                                  icon: const Icon(Icons.person_add_alt_1),
-                                  label: const Text(
-                                    "Add New Student",
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Color(
-                                      AppConfig.primaryColor,
-                                    ),
-                                    foregroundColor: Colors.white,
+                                      );
+                                    },
+                                    icon: const Icon(Icons.upload_file),
+                                    label: const Text("Bulk Upload Students"),
                                   ),
                                 ),
-                              ),
 
-                              const SizedBox(height: 12),
+                                const SizedBox(height: 12),
 
-                              SizedBox(
-                                width: double.infinity,
-                                height: 54,
-                                child: OutlinedButton.icon(
-                                  onPressed: () {
-                                    showModalBottomSheet(
-                                      context: context,
-                                      isScrollControlled: true,
-                                      shape: const RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.vertical(
-                                          top: Radius.circular(24),
+                                SizedBox(
+                                  width: double.infinity,
+                                  height: 54,
+                                  child: OutlinedButton.icon(
+                                    onPressed: () async {
+                                      await Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) => ManageStudentsPage(),
                                         ),
-                                      ),
-                                      builder: (_) => _BulkUploadStudentForm(
-                                        provider: provider,
-                                      ),
-                                    );
-                                  },
-                                  icon: const Icon(Icons.upload_file),
-                                  label: const Text("Bulk Upload Students"),
-                                ),
-                              ),
+                                      );
 
-                              const SizedBox(height: 12),
-
-                              SizedBox(
-                                width: double.infinity,
-                                height: 54,
-                                child: OutlinedButton.icon(
-                                  onPressed: () async {
-                                    await Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (_) => ManageStudentsPage(),
+                                      // Refresh when returning
+                                      provider.loadDashboard();
+                                      provider.loadMostMissedWords();
+                                    },
+                                    icon: const Icon(Icons.group),
+                                    label: const Text(
+                                      'Manage Students',
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w600,
                                       ),
-                                    );
-
-                                    // Refresh when returning
-                                    provider.loadDashboard();
-                                    provider.loadMostMissedWords();
-                                  },
-                                  icon: const Icon(Icons.group),
-                                  label: const Text(
-                                    'Manage Students',
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w600,
                                     ),
-                                  ),
-                                  style: OutlinedButton.styleFrom(
-                                    foregroundColor: Color(
-                                      AppConfig.secondaryColor,
-                                    ),
-                                    side: BorderSide(
-                                      color: Color(AppConfig.secondaryColor),
+                                    style: OutlinedButton.styleFrom(
+                                      foregroundColor: Color(
+                                        AppConfig.secondaryColor,
+                                      ),
+                                      side: BorderSide(
+                                        color: Color(AppConfig.secondaryColor),
+                                      ),
                                     ),
                                   ),
                                 ),
-                              ),
-                            ],
+
+
+                                const SizedBox(height: 12),
+
+                                SizedBox(
+                                  width: double.infinity,
+                                  height: 54,
+                                  child: ElevatedButton.icon(
+                                    onPressed: () {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) => TeacherStoryBuilder(
+                                            students: provider.students
+                                            .map(
+                                                (student) => StoryStudent(
+                                                    id: student.id,
+                                                    name: student.name,
+                                                ),
+                                            ).toList(),
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                    icon: const Icon(Icons.auto_stories),
+                                    label: const Text(
+                                      'AI Story Builder',
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFF7C3AED),
+                                      foregroundColor: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
 
-                        const SizedBox(height: 32),
-                      ],
+                          const SizedBox(height: 32),
+                        ],
                     ],
                   ],
                 ),
@@ -627,30 +666,30 @@ class _AddStudentFormState extends State<_AddStudentForm> {
                 onPressed: loading
                     ? null
                     : () async {
-                        if (!_formKey.currentState!.validate()) return;
+                  if (!_formKey.currentState!.validate()) return;
 
-                        setState(() {
-                          loading = true;
-                          error = null;
-                        });
+                  setState(() {
+                    loading = true;
+                    error = null;
+                  });
 
-                        final r = await widget.provider.addStudent(
-                          firstName: first.text.trim(),
-                          lastName: last.text.trim(),
-                          email: email.text.trim(),
-                          password: password.text.trim(),
-                        );
+                  final r = await widget.provider.addStudent(
+                    firstName: first.text.trim(),
+                    lastName: last.text.trim(),
+                    email: email.text.trim(),
+                    password: password.text.trim(),
+                  );
 
-                        if (r != null) {
-                          setState(() {
-                            loading = false;
-                            error = r;
-                          });
-                          return;
-                        }
+                  if (r != null) {
+                    setState(() {
+                      loading = false;
+                      error = r;
+                    });
+                    return;
+                  }
 
-                        Navigator.pop(context);
-                      },
+                  Navigator.pop(context);
+                },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Color(AppConfig.primaryColor),
                   foregroundColor: Colors.white,
