@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:readright/config/config.dart';
 import 'package:readright/features/flash_dash/models/flash_dash_game_models.dart';
+import 'package:readright/features/flash_dash/models/flash_dash_persistence_models.dart';
 import 'package:readright/models/word.dart';
 
 class FlashDashSummaryView extends StatelessWidget {
@@ -8,6 +9,11 @@ class FlashDashSummaryView extends StatelessWidget {
   final FlashDashRoundSummary summary;
   final VoidCallback onPlayAgain;
   final VoidCallback onDashboard;
+  final VoidCallback? onProgress;
+  final bool progressEnabled;
+  final FlashDashResultSaveStatus saveStatus;
+  final String? saveError;
+  final VoidCallback? onRetrySave;
 
   const FlashDashSummaryView({
     super.key,
@@ -15,6 +21,11 @@ class FlashDashSummaryView extends StatelessWidget {
     required this.summary,
     required this.onPlayAgain,
     required this.onDashboard,
+    this.onProgress,
+    this.progressEnabled = false,
+    this.saveStatus = FlashDashResultSaveStatus.notStarted,
+    this.saveError,
+    this.onRetrySave,
   });
 
   @override
@@ -193,7 +204,7 @@ class FlashDashSummaryView extends StatelessWidget {
                     )
                   else
                     ...mostPracticed.map(
-                      (entry) => Padding(
+                          (entry) => Padding(
                         padding: const EdgeInsets.symmetric(vertical: 6),
                         child: Row(
                           children: [
@@ -232,6 +243,10 @@ class FlashDashSummaryView extends StatelessWidget {
               ),
             ),
           ),
+          if (saveStatus != FlashDashResultSaveStatus.notStarted) ...[
+            const SizedBox(height: 16),
+            _buildSaveStatusCard(context),
+          ],
           const SizedBox(height: 22),
           SizedBox(
             width: double.infinity,
@@ -253,6 +268,37 @@ class FlashDashSummaryView extends StatelessWidget {
               ),
             ),
           ),
+          if (onProgress != null) ...[
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              height: 52,
+              child: OutlinedButton.icon(
+                key: const Key('flash-dash-view-progress'),
+                onPressed: progressEnabled ? onProgress : null,
+                icon: const Icon(Icons.insights_rounded),
+                label: Text(
+                  progressEnabled
+                      ? 'View Progress'
+                      : 'View Progress After Saving',
+                ),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Color(AppConfig.primaryColor),
+                  side: BorderSide(
+                    color: Color(AppConfig.primaryColor),
+                    width: 2,
+                  ),
+                  textStyle: const TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+              ),
+            ),
+          ],
           const SizedBox(height: 10),
           SizedBox(
             width: double.infinity,
@@ -282,6 +328,94 @@ class FlashDashSummaryView extends StatelessWidget {
     );
   }
 
+  Widget _buildSaveStatusCard(BuildContext context) {
+    switch (saveStatus) {
+      case FlashDashResultSaveStatus.notStarted:
+        return const SizedBox.shrink();
+      case FlashDashResultSaveStatus.saving:
+        return Card(
+          child: ListTile(
+            leading: SizedBox(
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(
+                strokeWidth: 3,
+                color: Color(AppConfig.secondaryColor),
+              ),
+            ),
+            title: const Text(
+              'Saving your result…',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            subtitle: const Text('You can still read your round summary.'),
+          ),
+        );
+      case FlashDashResultSaveStatus.saved:
+        return Card(
+          child: ListTile(
+            leading: Icon(
+              Icons.cloud_done_rounded,
+              color: Color(AppConfig.primaryColor),
+            ),
+            title: const Text(
+              'Result saved',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            subtitle: const Text('Your Flash Dash round is safely stored.'),
+          ),
+        );
+      case FlashDashResultSaveStatus.failed:
+        return Card(
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(Icons.cloud_off_rounded),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Result not saved yet',
+                            style: TextStyle(
+                              fontSize: 17,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            saveError ??
+                                'Your summary is safe on this screen. Try saving again.',
+                            style: const TextStyle(height: 1.35),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                if (onRetrySave != null) ...[
+                  const SizedBox(height: 10),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: OutlinedButton.icon(
+                      onPressed: onRetrySave,
+                      icon: const Icon(Icons.refresh_rounded),
+                      label: const Text('Retry Save'),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        );
+    }
+  }
+
   List<_PracticedWord> _mostPracticedWords(FlashDashRoundSummary round) {
     final wordById = <String, Word>{
       for (final word in round.originalRoundWords) word.id: word,
@@ -291,10 +425,10 @@ class FlashDashSummaryView extends StatelessWidget {
         .where((entry) => entry.value > 1 && wordById.containsKey(entry.key))
         .map(
           (entry) => _PracticedWord(
-            word: wordById[entry.key]!,
-            attempts: entry.value,
-          ),
-        )
+        word: wordById[entry.key]!,
+        attempts: entry.value,
+      ),
+    )
         .toList();
 
     entries.sort((a, b) {

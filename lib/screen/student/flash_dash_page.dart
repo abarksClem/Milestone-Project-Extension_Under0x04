@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:readright/config/config.dart';
+import 'package:readright/features/flash_dash/data/flash_dash_results_repository.dart';
 import 'package:readright/features/flash_dash/data/flash_dash_word_repository.dart';
+import 'package:readright/features/flash_dash/data/supabase_flash_dash_results_repository.dart';
 import 'package:readright/features/flash_dash/data/supabase_flash_dash_word_repository.dart';
 import 'package:readright/features/flash_dash/models/flash_dash_game_models.dart';
+import 'package:readright/features/flash_dash/models/flash_dash_persistence_models.dart';
 import 'package:readright/features/flash_dash/presentation/flash_dash_session_controller.dart';
 import 'package:readright/features/flash_dash/widgets/flash_dash_instructions_view.dart';
 import 'package:readright/features/flash_dash/widgets/flash_dash_progress_panel.dart';
@@ -13,11 +16,13 @@ import 'package:readright/widgets/student_base_scaffold.dart';
 class FlashDashPage extends StatefulWidget {
   final FlashDashWordRepository? repository;
   final FlashDashGameConfig config;
+  final FlashDashResultsRepository? resultsRepository;
   final FlashDashEngineFactory? engineFactory;
 
   const FlashDashPage({
     super.key,
     this.repository,
+    this.resultsRepository,
     this.config = const FlashDashGameConfig(
       cardDuration: Duration(seconds: 5),
       selectedWordCount: 10,
@@ -39,9 +44,16 @@ class _FlashDashPageState extends State<FlashDashPage>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
 
+    final wordRepository =
+        widget.repository ?? SupabaseFlashDashWordRepository();
+    final resultRepository = widget.resultsRepository ??
+        (widget.repository == null
+            ? SupabaseFlashDashResultsRepository()
+            : null);
+
     _controller = FlashDashSessionController(
-      repository:
-          widget.repository ?? SupabaseFlashDashWordRepository(),
+      repository: wordRepository,
+      resultsRepository: resultRepository,
       config: widget.config,
       engineFactory: widget.engineFactory,
     );
@@ -80,39 +92,39 @@ class _FlashDashPageState extends State<FlashDashPage>
     }
 
     final shouldExit = await showDialog<bool>(
-          context: context,
-          barrierDismissible: false,
-          builder: (dialogContext) {
-            return AlertDialog(
-              icon: Icon(
-                Icons.exit_to_app_rounded,
-                color: Color(AppConfig.secondaryColor),
-                size: 38,
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return AlertDialog(
+          icon: Icon(
+            Icons.exit_to_app_rounded,
+            color: Color(AppConfig.secondaryColor),
+            size: 38,
+          ),
+          title: const Text('Leave Flash Dash?'),
+          content: const Text(
+            'This round is not finished. Your current round will be lost.',
+            textAlign: TextAlign.center,
+          ),
+          actionsAlignment: MainAxisAlignment.spaceEvenly,
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Keep Playing'),
+            ),
+            ElevatedButton.icon(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              icon: const Icon(Icons.exit_to_app_rounded),
+              label: const Text('Leave'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Color(AppConfig.secondaryColor),
+                foregroundColor: Colors.white,
               ),
-              title: const Text('Leave Flash Dash?'),
-              content: const Text(
-                'This round is not finished. Your current round will be lost.',
-                textAlign: TextAlign.center,
-              ),
-              actionsAlignment: MainAxisAlignment.spaceEvenly,
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(dialogContext).pop(false),
-                  child: const Text('Keep Playing'),
-                ),
-                ElevatedButton.icon(
-                  onPressed: () => Navigator.of(dialogContext).pop(true),
-                  icon: const Icon(Icons.exit_to_app_rounded),
-                  label: const Text('Leave'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Color(AppConfig.secondaryColor),
-                    foregroundColor: Colors.white,
-                  ),
-                ),
-              ],
-            );
-          },
-        ) ??
+            ),
+          ],
+        );
+      },
+    ) ??
         false;
 
     if (!mounted) return false;
@@ -134,7 +146,15 @@ class _FlashDashPageState extends State<FlashDashPage>
     Navigator.pushNamedAndRemoveUntil(
       context,
       '/studentDashboard',
-      (route) => false,
+          (route) => false,
+    );
+  }
+
+  void _openProgress() {
+    Navigator.pushNamedAndRemoveUntil(
+      context,
+      '/progress',
+          (route) => false,
     );
   }
 
@@ -198,6 +218,17 @@ class _FlashDashPageState extends State<FlashDashPage>
           },
           onDashboard: () =>
               _returnToDashboard(confirmActiveRound: false),
+          onProgress: _openProgress,
+          progressEnabled: _controller.resultSaveStatus ==
+              FlashDashResultSaveStatus.saved,
+          saveStatus: _controller.resultSaveStatus,
+          saveError: _controller.resultSaveError,
+          onRetrySave: _controller.resultSaveStatus ==
+              FlashDashResultSaveStatus.failed
+              ? () {
+            _controller.retryResultSave();
+          }
+              : null,
         );
     }
   }
@@ -338,7 +369,7 @@ class _FlashDashPageState extends State<FlashDashPage>
                   children: [
                     FlashDashProgressPanel(
                       listTitle:
-                          _controller.wordSet?.listTitle ?? 'Current Dolch List',
+                      _controller.wordSet?.listTitle ?? 'Current Dolch List',
                       completedWords: _controller.completedWords,
                       totalWords: _controller.totalWords,
                       remainingUniqueWords: _controller.remainingUniqueWords,
@@ -353,8 +384,8 @@ class _FlashDashPageState extends State<FlashDashPage>
                           child: OutlinedButton.icon(
                             onPressed: !_controller.isTransitioning && !isPaused
                                 ? () {
-                                    _controller.pauseGame();
-                                  }
+                              _controller.pauseGame();
+                            }
                                 : null,
                             icon: const Icon(Icons.pause_rounded),
                             label: const Text('Pause'),
@@ -368,8 +399,8 @@ class _FlashDashPageState extends State<FlashDashPage>
                           child: OutlinedButton.icon(
                             onPressed: !_controller.isTransitioning
                                 ? () {
-                                    _returnToDashboard();
-                                  }
+                              _returnToDashboard();
+                            }
                                 : null,
                             icon: const Icon(Icons.exit_to_app_rounded),
                             label: const Text('Exit'),
@@ -389,7 +420,7 @@ class _FlashDashPageState extends State<FlashDashPage>
                       transitionAnswer: _controller.activeTransition?.answer,
                       onAnswerRequested: _controller.submitAnswer,
                       onTransitionAnimationComplete:
-                          _controller.completeTransitionAnimation,
+                      _controller.completeTransitionAnimation,
                       onCardReady: () {
                         _controller.markCardReady();
                       },

@@ -3,9 +3,11 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:readright/models/word.dart';
 
+import '../data/flash_dash_results_repository.dart';
 import '../data/flash_dash_word_repository.dart';
 import '../logic/flash_dash_game_engine.dart';
 import '../models/flash_dash_game_models.dart';
+import '../models/flash_dash_persistence_models.dart';
 
 enum FlashDashScreenState {
   loading,
@@ -17,13 +19,14 @@ enum FlashDashScreenState {
 }
 
 typedef FlashDashEngineFactory = FlashDashGameEngine Function(
-  FlashDashGameConfig config,
-);
+    FlashDashGameConfig config,
+    );
 
 typedef FlashDashNow = DateTime Function();
 
 class FlashDashSessionController extends ChangeNotifier {
   final FlashDashWordRepository repository;
+  final FlashDashResultsRepository? resultsRepository;
   final FlashDashGameConfig config;
   final FlashDashEngineFactory _engineFactory;
   final FlashDashNow _now;
@@ -46,13 +49,21 @@ class FlashDashSessionController extends ChangeNotifier {
   bool _disposed = false;
   int _loadRequestId = 0;
 
+  FlashDashResultSaveStatus _resultSaveStatus =
+      FlashDashResultSaveStatus.notStarted;
+  FlashDashSessionSaveRequest? _pendingSaveRequest;
+  FlashDashSavedSession? _savedSession;
+  String? _resultSaveError;
+  int _saveOperationId = 0;
+
   FlashDashSessionController({
     required this.repository,
     required this.config,
+    this.resultsRepository,
     FlashDashEngineFactory? engineFactory,
     FlashDashNow? now,
   })  : _engineFactory =
-            engineFactory ?? ((gameConfig) => FlashDashGameEngine(config: gameConfig)),
+      engineFactory ?? ((gameConfig) => FlashDashGameEngine(config: gameConfig)),
         _now = now ?? DateTime.now,
         _remainingCardTime = config.cardDuration;
 
@@ -93,13 +104,17 @@ class FlashDashSessionController extends ChangeNotifier {
   }
 
   FlashDashRoundSummary? get summary => _engine?.summary;
+  FlashDashResultSaveStatus get resultSaveStatus => _resultSaveStatus;
+  String? get resultSaveError => _resultSaveError;
+  String? get savedSessionId => _savedSession?.sessionId;
 
   bool get hasRoundInProgress =>
       _screenState == FlashDashScreenState.activeGame ||
-      _screenState == FlashDashScreenState.pausedGame;
+          _screenState == FlashDashScreenState.pausedGame;
 
   Future<void> loadWords() async {
     final requestId = ++_loadRequestId;
+    _resetPersistenceState();
     _cancelCountdown(preserveRemaining: false);
     _wordSet = null;
     _engine = null;
@@ -153,6 +168,7 @@ class FlashDashSessionController extends ChangeNotifier {
   }
 
   bool playAgain() {
+    _resetPersistenceState();
     _cancelCountdown(preserveRemaining: false);
     _activeTransition = null;
     _answerLocked = false;
@@ -192,9 +208,11 @@ class FlashDashSessionController extends ChangeNotifier {
 
     _answerLocked = true;
     _cardReady = false;
+    _captureRemainingTime();
+    final elapsed = _elapsedForCurrentCard(answer);
     _cancelCountdown(preserveRemaining: false);
 
-    final transition = gameEngine.submitAnswer(answer);
+    final transition = gameEngine.submitAnswer(answer, elapsed: elapsed);
     if (transition == null) {
       _answerLocked = false;
       _cardReady = true;
@@ -227,6 +245,7 @@ class FlashDashSessionController extends ChangeNotifier {
       _screenState = FlashDashScreenState.roundComplete;
       _cancelCountdown(preserveRemaining: false);
       _notify();
+      _beginCompletedRoundSave();
       return;
     }
 
@@ -322,6 +341,89 @@ class FlashDashSessionController extends ChangeNotifier {
     return true;
   }
 
+  bool retryResultSave() {
+    if (_resultSaveStatus != FlashDashResultSaveStatus.failed ||
+        _pendingSaveRequest == null ||
+        resultsRepository == null) {
+      return false;
+    }
+
+    unawaited(_savePendingRequest());
+    return true;
+  }
+
+  Duration _elapsedForCurrentCard(FlashDashAnswer answer) {
+    if (answer == FlashDashAnswer.timeout) {
+      return config.cardDuration;
+    }
+
+    final elapsed = config.cardDuration - _remainingCardTime;
+    if (elapsed.isNegative) return Duration.zero;
+    if (elapsed > config.cardDuration) return config.cardDuration;
+    return elapsed;
+  }
+
+  void _beginCompletedRoundSave() {
+    final persistence = resultsRepository;
+    final roundSummary = summary;
+    final loadedWordSet = _wordSet;
+
+    if (persistence == null || roundSummary == null || loadedWordSet == null) {
+      return;
+    }
+
+    try {
+      _pendingSaveRequest = FlashDashSessionSaveRequest.fromSummary(
+        sessionId: persistence.createSessionId(),
+        listId: loadedWordSet.listId,
+        summary: roundSummary,
+      );
+      unawaited(_savePendingRequest());
+    } catch (error) {
+      _resultSaveStatus = FlashDashResultSaveStatus.failed;
+      _resultSaveError =
+      'Your result could not be prepared for saving. Your summary is still available.';
+      _notify();
+    }
+  }
+
+  Future<void> _savePendingRequest() async {
+    final persistence = resultsRepository;
+    final request = _pendingSaveRequest;
+    if (persistence == null || request == null) return;
+
+    final operationId = ++_saveOperationId;
+    _resultSaveStatus = FlashDashResultSaveStatus.saving;
+    _resultSaveError = null;
+    _notify();
+
+    try {
+      final saved = await persistence.saveSession(request);
+      if (_disposed || operationId != _saveOperationId) return;
+
+      _savedSession = saved;
+      _resultSaveStatus = FlashDashResultSaveStatus.saved;
+      _resultSaveError = null;
+      _notify();
+    } catch (error) {
+      if (_disposed || operationId != _saveOperationId) return;
+
+      _resultSaveStatus = FlashDashResultSaveStatus.failed;
+      _resultSaveError = error is FlashDashResultsRepositoryException
+          ? error.message
+          : 'Your result could not be saved. Your summary is still available.';
+      _notify();
+    }
+  }
+
+  void _resetPersistenceState() {
+    _saveOperationId += 1;
+    _resultSaveStatus = FlashDashResultSaveStatus.notStarted;
+    _pendingSaveRequest = null;
+    _savedSession = null;
+    _resultSaveError = null;
+  }
+
   bool _prepareEngine() {
     final loadedWordSet = _wordSet;
     if (loadedWordSet == null) {
@@ -361,7 +463,7 @@ class FlashDashSessionController extends ChangeNotifier {
 
     _countdownTimer = Timer.periodic(
       const Duration(milliseconds: 100),
-      (timer) {
+          (timer) {
         if (_disposed ||
             _screenState != FlashDashScreenState.activeGame ||
             _activeTransition != null ||
@@ -418,6 +520,7 @@ class FlashDashSessionController extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     _loadRequestId += 1;
+    _saveOperationId += 1;
     _countdownTimer?.cancel();
     _countdownTimer = null;
     super.dispose();

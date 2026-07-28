@@ -29,6 +29,28 @@ class FlashDashGameConfig {
   });
 }
 
+/// One accepted card result during a Flash Dash round.
+///
+/// This event history is used to persist the ordered attempts after the round
+/// completes. It is separate from pronunciation attempts.
+class FlashDashAttemptEvent {
+  final int sequenceNumber;
+  final Word word;
+  final FlashDashAnswer result;
+  final int attemptNumberForWord;
+  final Duration elapsed;
+
+  FlashDashAttemptEvent({
+    required this.sequenceNumber,
+    required Word word,
+    required this.result,
+    required this.attemptNumberForWord,
+    required this.elapsed,
+  }) : word = word.copyWith(
+    sentences: List<String>.unmodifiable(word.sentences),
+  );
+}
+
 class FlashDashTransition {
   final Word answeredWord;
   final FlashDashAnswer answer;
@@ -61,6 +83,7 @@ class FlashDashRoundSummary {
   final Map<String, int> perWordAttemptCounts;
   final List<Word> wordsKnownOnFirstTry;
   final List<Word> wordsRequiringAdditionalPractice;
+  final List<FlashDashAttemptEvent> attemptEvents;
   final DateTime roundStartTime;
   final DateTime roundCompletionTime;
 
@@ -74,16 +97,24 @@ class FlashDashRoundSummary {
     required Map<String, int> perWordAttemptCounts,
     required List<Word> wordsKnownOnFirstTry,
     required List<Word> wordsRequiringAdditionalPractice,
+    required List<FlashDashAttemptEvent> attemptEvents,
     required this.roundStartTime,
     required this.roundCompletionTime,
   })  : originalRoundWords = List<Word>.unmodifiable(originalRoundWords),
         perWordAttemptCounts = Map<String, int>.unmodifiable(
           perWordAttemptCounts,
         ),
-        wordsKnownOnFirstTry = List<Word>.unmodifiable(wordsKnownOnFirstTry),
+        wordsKnownOnFirstTry = List<Word>.unmodifiable(
+          wordsKnownOnFirstTry,
+        ),
         wordsRequiringAdditionalPractice = List<Word>.unmodifiable(
           wordsRequiringAdditionalPractice,
+        ),
+        attemptEvents = List<FlashDashAttemptEvent>.unmodifiable(
+          attemptEvents,
         );
 
-  Duration get elapsedTime => roundCompletionTime.difference(roundStartTime);
+  Duration get elapsedTime {
+    return roundCompletionTime.difference(roundStartTime);
+  }
 }

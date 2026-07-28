@@ -21,6 +21,8 @@ class FlashDashGameEngine {
   final Map<String, int> _perWordAttemptCounts = <String, int>{};
   final Set<String> _firstTryWordIds = <String>{};
   final Set<String> _additionalPracticeWordIds = <String>{};
+  final List<FlashDashAttemptEvent> _attemptEvents =
+  <FlashDashAttemptEvent>[];
 
   int _totalAnswerAttempts = 0;
   int _totalSwipeAttempts = 0;
@@ -62,17 +64,20 @@ class FlashDashGameEngine {
   Map<String, int> get perWordAttemptCounts =>
       Map<String, int>.unmodifiable(_perWordAttemptCounts);
 
+  List<FlashDashAttemptEvent> get attemptEvents =>
+      List<FlashDashAttemptEvent>.unmodifiable(_attemptEvents);
+
   List<Word> get wordsKnownOnFirstTry => List<Word>.unmodifiable(
-        _originalRoundWords.where(
+    _originalRoundWords.where(
           (word) => _firstTryWordIds.contains(word.id),
-        ),
-      );
+    ),
+  );
 
   List<Word> get wordsRequiringAdditionalPractice => List<Word>.unmodifiable(
-        _originalRoundWords.where(
+    _originalRoundWords.where(
           (word) => _additionalPracticeWordIds.contains(word.id),
-        ),
-      );
+    ),
+  );
 
   bool initialize(List<Word> words) {
     if (_status != FlashDashGameStatus.initial) {
@@ -141,13 +146,14 @@ class FlashDashGameEngine {
       ..clear()
       ..addEntries(
         _originalRoundWords.map(
-          (word) => MapEntry<String, int>(word.id, 0),
+              (word) => MapEntry<String, int>(word.id, 0),
         ),
       );
 
     _clearedWordIds.clear();
     _firstTryWordIds.clear();
     _additionalPracticeWordIds.clear();
+    _attemptEvents.clear();
     _totalAnswerAttempts = 0;
     _totalSwipeAttempts = 0;
     _practiceAgainSwipeCount = 0;
@@ -189,19 +195,31 @@ class FlashDashGameEngine {
     return true;
   }
 
-  FlashDashTransition? submitKnown() =>
-      submitAnswer(FlashDashAnswer.known);
+  FlashDashTransition? submitKnown({Duration elapsed = Duration.zero}) =>
+      submitAnswer(FlashDashAnswer.known, elapsed: elapsed);
 
-  FlashDashTransition? submitPracticeAgain() =>
-      submitAnswer(FlashDashAnswer.practiceAgain);
+  FlashDashTransition? submitPracticeAgain({
+    Duration elapsed = Duration.zero,
+  }) =>
+      submitAnswer(FlashDashAnswer.practiceAgain, elapsed: elapsed);
 
-  FlashDashTransition? submitTimeout() =>
-      submitAnswer(FlashDashAnswer.timeout);
+  FlashDashTransition? submitTimeout({Duration? elapsed}) => submitAnswer(
+    FlashDashAnswer.timeout,
+    elapsed: elapsed ?? config.cardDuration,
+  );
 
-  FlashDashTransition? submitAnswer(FlashDashAnswer answer) {
+  FlashDashTransition? submitAnswer(
+      FlashDashAnswer answer, {
+        Duration elapsed = Duration.zero,
+      }) {
     if (_status != FlashDashGameStatus.playing ||
         _isTransitionProcessing ||
         _activeQueue.isEmpty) {
+      return null;
+    }
+
+    if (elapsed.isNegative) {
+      _fail('Attempt elapsed time cannot be negative.');
       return null;
     }
 
@@ -241,6 +259,16 @@ class FlashDashGameEngine {
         _activeQueue.add(answeredWord);
         break;
     }
+
+    _attemptEvents.add(
+      FlashDashAttemptEvent(
+        sequenceNumber: _totalAnswerAttempts,
+        word: answeredWord,
+        result: answer,
+        attemptNumberForWord: attemptNumber,
+        elapsed: elapsed,
+      ),
+    );
 
     if (_activeQueue.isEmpty) {
       _roundCompletionTime = _clock();
@@ -289,7 +317,8 @@ class FlashDashGameEngine {
       perWordAttemptCounts: _perWordAttemptCounts,
       wordsKnownOnFirstTry: wordsKnownOnFirstTry.map(_copyWord).toList(),
       wordsRequiringAdditionalPractice:
-          wordsRequiringAdditionalPractice.map(_copyWord).toList(),
+      wordsRequiringAdditionalPractice.map(_copyWord).toList(),
+      attemptEvents: _attemptEvents,
       roundStartTime: _roundStartTime!,
       roundCompletionTime: _roundCompletionTime!,
     );
@@ -333,6 +362,71 @@ class FlashDashGameEngine {
       );
     }
 
+    if (_attemptEvents.length != _totalAnswerAttempts) {
+      return _fail(
+        'Invariant failed: attempt event count does not match total attempts.',
+      );
+    }
+
+    final eventCounts = <String, int>{
+      for (final word in _originalRoundWords) word.id: 0,
+    };
+    var practiceAgainEvents = 0;
+    var timeoutEvents = 0;
+    var swipeEvents = 0;
+
+    for (var index = 0; index < _attemptEvents.length; index += 1) {
+      final event = _attemptEvents[index];
+      if (event.sequenceNumber != index + 1) {
+        return _fail(
+          'Invariant failed: attempt sequence numbers must be contiguous.',
+        );
+      }
+      if (!originalIds.contains(event.word.id)) {
+        return _fail(
+          'Invariant failed: an attempt references an unknown word.',
+        );
+      }
+      if (event.elapsed.isNegative) {
+        return _fail(
+          'Invariant failed: an attempt has a negative elapsed time.',
+        );
+      }
+
+      eventCounts[event.word.id] = (eventCounts[event.word.id] ?? 0) + 1;
+      if (event.attemptNumberForWord != eventCounts[event.word.id]) {
+        return _fail(
+          'Invariant failed: per-word attempt numbers are not contiguous.',
+        );
+      }
+
+      switch (event.result) {
+        case FlashDashAnswer.known:
+          swipeEvents += 1;
+          break;
+        case FlashDashAnswer.practiceAgain:
+          swipeEvents += 1;
+          practiceAgainEvents += 1;
+          break;
+        case FlashDashAnswer.timeout:
+          timeoutEvents += 1;
+          break;
+      }
+    }
+
+    if (!_mapsEqual(eventCounts, _perWordAttemptCounts)) {
+      return _fail(
+        'Invariant failed: attempt events do not match per-word counters.',
+      );
+    }
+    if (swipeEvents != _totalSwipeAttempts ||
+        practiceAgainEvents != _practiceAgainSwipeCount ||
+        timeoutEvents != _timeoutCount) {
+      return _fail(
+        'Invariant failed: attempt outcomes do not match aggregate counters.',
+      );
+    }
+
     if (_status == FlashDashGameStatus.completed && _activeQueue.isNotEmpty) {
       return _fail(
         'Invariant failed: a completed round must have an empty queue.',
@@ -363,6 +457,14 @@ class FlashDashGameEngine {
 
   static bool _isSubset(Set<String> candidate, Set<String> allowed) {
     return allowed.containsAll(candidate);
+  }
+
+  static bool _mapsEqual(Map<String, int> left, Map<String, int> right) {
+    if (left.length != right.length) return false;
+    for (final entry in left.entries) {
+      if (right[entry.key] != entry.value) return false;
+    }
+    return true;
   }
 
   static Word _copyWord(Word word) {
